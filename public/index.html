@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>知行 · 学习工作台</title><link rel="stylesheet" href="./style.css"><script src="./lucide.js" defer></script><script src="./app.js" defer></script></head>
+<body>
+  <header><div class="brand"><span class="brandmark" aria-hidden="true"><i data-lucide="layers-2"></i></span><strong>知行<span class="subbrand">学习工作台</span></strong><span class="version">WORKSPACE / 01</span></div><div class="tools"><span id="sync" role="status">连接中</span><button id="theme" class="icon-button" aria-label="切换明暗主题" title="切换明暗主题"><i data-lucide="sun"></i></button><button id="export" class="icon-button" aria-label="导出档案" title="导出档案"><i data-lucide="download"></i></button><button id="handoff" class="icon-button" aria-label="导出交接摘要" title="导出交接摘要"><i data-lucide="file-output"></i></button></div></header>
+  <div class="shell">
+    <aside><div class="aside-top"><span class="aside-label">工作台</span><button id="collapse" class="icon-button" aria-label="收起侧栏" title="收起侧栏"><i data-lucide="panel-left-close"></i></button></div><label for="dataset">学习空间</label><select id="dataset"><option value="archive">我的学习</option><option value="demo">示例 · 非真实记录</option></select><button id="overview" class="nav-home"><i data-lucide="panels-top-left"></i><span>学习总览</span></button><div class="aside-heading"><span>学习主题</span><span id="topic-count">0</span></div><nav id="topics" aria-label="学习主题"></nav><div class="aside-footer"><div class="host"><i data-lucide="boxes"></i><span>DeepSeek Harness</span></div><span id="revision">共享档案</span></div></aside>
+    <main><div class="mobile-space"><button id="space-toggle" class="icon-button" aria-label="切换真实与示例空间" title="切换真实与示例空间"><i data-lucide="arrow-left-right"></i></button></div><div id="notice" role="status" hidden></div><div id="error" role="alert" hidden></div><div id="content"></div><div id="toast" role="status" hidden></div></main>
+  </div>
+</body></html>
