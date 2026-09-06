@@ -7,6 +7,19 @@ function text(value, field) { check(typeof value === 'string' && value.trim().le
 function id(value) { check(typeof value === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value), 'Invalid id'); }
 function strings(value, field) { check(Array.isArray(value), `Invalid ${field}`); value.forEach(v => text(v, field)); }
 function choice(value, options, field) { check(options.includes(value), `Invalid ${field}`); }
+function diagnosisValid(d, t) {
+  check(d && typeof d === 'object' && !Array.isArray(d), 'Invalid diagnosis');
+  for (const k of ['gap', 'basis', 'material']) text(d[k], `diagnosis ${k}`);
+  choice(d.basisType, ['prior', 'self-report', 'attempts'], 'diagnosis basisType');
+  check(Array.isArray(d.attemptIds), 'Invalid diagnosis attemptIds');
+  check(new Set(d.attemptIds).size === d.attemptIds.length, 'Duplicate diagnosis evidence');
+  if (d.modelId !== undefined) check(t.models.some(m => m.id === d.modelId), 'Unknown diagnosis model');
+  for (const ref of d.attemptIds) {
+    id(ref);
+    check(t.attempts.some(p => p.id === ref && (!d.modelId || p.modelId === d.modelId)), 'Unknown diagnosis evidence');
+  }
+  check(d.basisType === 'attempts' ? d.attemptIds.length > 0 : d.attemptIds.length === 0, 'Diagnosis evidence does not match basisType');
+}
 function sessionsValid(t) {
   if(t.sessions===undefined){check(t.primarySessionId===undefined,'Primary session must be linked');return;}
   check(Array.isArray(t.sessions)&&t.sessions.length<=100,'Invalid sessions');
@@ -43,6 +56,7 @@ export function validateArchive(a) {
     check(Array.isArray(t.models) && Array.isArray(t.attempts) && Array.isArray(t.history), 'Invalid topic collections');
     t.models.forEach(modelValid);
     sessionsValid(t);
+    if (t.diagnosis !== undefined) diagnosisValid(t.diagnosis, t);
   }
   return a;
 }
@@ -119,7 +133,14 @@ export function applyOperation(archive, op, now = new Date()) {
       p.annotations.push({at:stamp, author:op.author, note:op.note});
     } else if (op.type === 'set-next') {
       text(op.next, 'next'); text(op.author, 'author');
-      t.history.push({type:'next', at:stamp, author:op.author, before:t.next, after:op.next}); t.next = op.next;
+      if (op.diagnosis !== undefined) diagnosisValid(op.diagnosis, t);
+      t.history.push({type:'next', at:stamp, author:op.author, before:t.next, after:op.next,
+        ...(t.diagnosis ? {beforeDiagnosis:t.diagnosis} : {}),
+        ...(op.diagnosis ? {afterDiagnosis:op.diagnosis} : {})});
+      t.next = op.next;
+      // Legacy next-step writes must not leave an unrelated diagnosis attached.
+      if (op.diagnosis) t.diagnosis = {...op.diagnosis, author:op.author, at:stamp};
+      else delete t.diagnosis;
     } else throw new Error('Unknown operation');
   }
   a.revision++; a.updatedAt = stamp;

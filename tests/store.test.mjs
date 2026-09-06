@@ -36,6 +36,26 @@ test('delayed retests require elapsed time and matching evidence',()=>{
   op.attempt.occurredAt='2026-09-06T01:00:00Z';assert.equal(applyOperation(a,op,new Date('2026-09-06T02:00:00Z')).revision,4);
   op.attempt.occurredAt='2027-01-01T00:00:00Z';assert.throws(()=>applyOperation(a,op,new Date('2026-09-06T02:00:00Z')),/future/);
 });
+test('diagnosis preserves its evidence and history without inventing attempts',()=>{
+  let a=base();
+  const diagnosis={modelId:'model',gap:'Need a concrete example',basisType:'prior',basis:'No response yet',attemptIds:[],material:'Worked example'};
+  const next=d=>({type:'set-next',expectedRevision:a.revision,topicId:'topic',author:'assistant',next:'Compare examples',diagnosis:d});
+  a=applyOperation(a,next(diagnosis));
+  assert.equal(a.topics[0].attempts.length,0);
+  assert.throws(()=>applyOperation(a,next({...diagnosis,basisType:'attempts'})),/basisType/);
+  assert.throws(()=>applyOperation(a,next({...diagnosis,basisType:'attempts',attemptIds:['missing']})),/evidence/);
+  assert.throws(()=>applyOperation(a,next({...diagnosis,modelId:'missing'})),/model/);
+  a=applyOperation(a,{type:'record-attempt',expectedRevision:a.revision,topicId:'topic',attempt});
+  a=applyOperation(a,next({...diagnosis,basisType:'attempts',attemptIds:['attempt'],basis:'Missed condition'}));
+  assert.equal(a.topics[0].history.at(-1).beforeDiagnosis.basisType,'prior');
+  assert.equal(a.topics[0].diagnosis.basisType,'attempts');
+  assert.equal(a.topics[0].attempts.length,1);
+  const restored=applyOperation(empty(),{type:'restore-empty',expectedRevision:0,archive:a});
+  assert.deepEqual(restored.topics[0].diagnosis,a.topics[0].diagnosis);
+  a=applyOperation(a,next(undefined));
+  assert.equal(a.topics[0].diagnosis,undefined);
+  assert.equal(a.topics[0].history.at(-1).beforeDiagnosis.basisType,'attempts');
+});
 test('concurrent writers cannot overwrite each other; backups remain readable',async()=>{
   const root=await mkdtemp(join(tmpdir(),'learning-lab-test-'));
   try {

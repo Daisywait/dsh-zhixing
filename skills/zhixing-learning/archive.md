@@ -24,7 +24,8 @@ support: independent / hinted / explained。context: initial / new-context / del
 ```
 5. 下一步：
 ```json
-{"expectedRevision":4,"type":"set-next","topicId":"topic","author":"deepseek","next":"换一个没有提示的新例子，检查能否注意到行为频率变化。"}
+{"expectedRevision":4,"type":"set-next","topicId":"topic","author":"deepseek","next":"一起对照两个例子中的行为频率变化。","diagnosis":{"modelId":"model","gap":"行为频率与刺激性质可能混淆","basisType":"attempts","basis":"上次按刺激是否愉快判断，遗漏了行为频率","attemptIds":["attempt-001"],"material":"两个刺激相同、行为频率变化不同的完整例子"}}
 ```
+diagnosis 可省略以兼容旧档案，新学习轮应提供。gap、basis、material 为非空普通语言；basisType 为 prior / self-report / attempts。前两者的 attemptIds 必须为空，attempts 必须引用本主题已有作答；提供 modelId 时引用须属于该模型。工具核对引用但不能替代对判断内容的核实。诊断及下一步一同保存历史，不产生作答或改变掌握状态。不附诊断更新下一步时会移除过期诊断。
 
 6. 用户明确要求迁移档案时：先读取其导出的 JSON，再 read 确认当前档案没有主题；调用 apply，operation 为 `{"expectedRevision":0,"type":"restore-empty","archive":完整导出对象}`。只能导入真实档案，示例 isDemo=true 会被拒绝。已有主题时不要清空或覆盖，提示用户保留两份数据；不要自行合并评分。

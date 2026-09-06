@@ -55,7 +55,9 @@ test('dsh bridge creates an independent session and preserves drafts without sen
   const drafts={old:'Existing draft'};
   const snapshot={ids:['old'],byId:{old:{id:'old',cwd:'/work',displayTitle:'Original'}}};
   const binding=id=>({ctx:{id},session:{rename:async()=>({})}});
-  const ctx={workspaces:{list:{getSnapshot:()=>({items:[{workspaceId:'workspace-1',sessionIds:['old']}]})}},slots:{inject:(_,f)=>f(),register:(spec,component)=>{props=spec.inject('old');View=component;}},
+  let entry;
+  snapshot.current='old';
+  const ctx={workspaces:{list:{getSnapshot:()=>({items:[{workspaceId:'workspace-1',sessionIds:['old']}]})}},slots:{inject:(_,f)=>f(),register:(spec,component)=>{if(spec.name==='sidebar.footer.action'){entry=spec;return;}props=spec.inject('old');View=component;}},
     sessions:{list:{getSnapshot:()=>snapshot},refresh:async()=>{},binding,open:id=>opened=id,
       create:async opts=>{creates++;assert.equal(opts.workspaceId,'workspace-1');assert.ok(opts.sessionId);snapshot.ids.push(opts.sessionId);snapshot.byId[opts.sessionId]={id:opts.sessionId};return opts.sessionId;}},
     conversation:{input:{for:scope=>({state:{getSnapshot:()=>({draft:drafts[scope.id]||''})},setDraft:text=>drafts[scope.id]=text,notify(){}})}}};
@@ -64,6 +66,8 @@ test('dsh bridge creates an independent session and preserves drafts without sen
     window:{__ModuleLoader__:{load:m=>plugin=m.factory(()=>React)},addEventListener:(_,fn)=>listener=fn,removeEventListener(){}},
     location:{origin:'http://localhost:3080'},crypto:globalThis.crypto});
   plugin.apply(ctx);View({...props,openView:id=>view=id});
+  assert.equal(entry.id,'zhixing-entry');
+  assert.equal(typeof entry.inject().openLearning,'function');
   const request=async(action,payload,origin='http://localhost:3080')=>listener({origin,source:child,data:{type:'zhixing:request',requestId:'request',action,payload}});
   await request('create',{key:'topic-a',title:'Study'},'https://example.com');assert.equal(creates,0);
   await request('create',{key:'topic-a',title:'Study'});const target=replies.at(-1).result.id;
