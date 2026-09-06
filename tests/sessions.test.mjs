@@ -55,9 +55,9 @@ test('dsh bridge creates an independent session and preserves drafts without sen
   const drafts={old:'Existing draft'};
   const snapshot={ids:['old'],byId:{old:{id:'old',cwd:'/work',displayTitle:'Original'}}};
   const binding=id=>({ctx:{id},session:{rename:async()=>({})}});
-  const ctx={slots:{inject:(_,f)=>f(),register:(spec,component)=>{props=spec.inject('old');View=component;}},
+  const ctx={workspaces:{list:{getSnapshot:()=>({items:[{workspaceId:'workspace-1',sessionIds:['old']}]})}},slots:{inject:(_,f)=>f(),register:(spec,component)=>{props=spec.inject('old');View=component;}},
     sessions:{list:{getSnapshot:()=>snapshot},refresh:async()=>{},binding,open:id=>opened=id,
-      create:async opts=>{creates++;assert.equal(opts.cwd,'/work');assert.ok(opts.sessionId);snapshot.ids.push(opts.sessionId);snapshot.byId[opts.sessionId]={id:opts.sessionId};return opts.sessionId;}},
+      create:async opts=>{creates++;assert.equal(opts.workspaceId,'workspace-1');assert.ok(opts.sessionId);snapshot.ids.push(opts.sessionId);snapshot.byId[opts.sessionId]={id:opts.sessionId};return opts.sessionId;}},
     conversation:{input:{for:scope=>({state:{getSnapshot:()=>({draft:drafts[scope.id]||''})},setDraft:text=>drafts[scope.id]=text,notify(){}})}}};
   const React={createElement:()=>null,useRef:()=>({current:{contentWindow:child}}),useEffect:f=>f()};
   vm.runInNewContext(await readFile(new URL('../lib/client.js',import.meta.url),'utf8'),{
