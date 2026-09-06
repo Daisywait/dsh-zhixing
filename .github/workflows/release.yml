@@ -2,6 +2,12 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish
+        required: true
+        type: string
 permissions:
   contents: write
 jobs:
@@ -9,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -18,5 +26,15 @@ jobs:
       - name: Publish installable package
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" ./*.tgz --generate-notes
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            for package in ./*.tgz; do
+              name=$(basename "$package")
+              if ! gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+                gh release upload "$RELEASE_TAG" "$package"
+              fi
+            done
+          else
+            gh release create "$RELEASE_TAG" ./*.tgz --generate-notes
+          fi
