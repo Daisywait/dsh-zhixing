@@ -8,7 +8,7 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const badge = (v, cls='') => `<span class="badge ${cls}">${esc(names[v] ?? v)}</span>`;
 const date = v => v ? new Date(v).toLocaleString('zh-CN',{hour12:false}) : '尚未开始';
 const list = a => a.length ? `<ul>${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '<span class="source">尚未记录</span>';
-const starter = '请使用 zhixing-learning 技能开始学习。先读取共享学习档案。帮我把学习目标转化为可判别或可预测的具体任务，然后用一道题诊断，每次等待我回答。不要提前给出答案；真实作答后再更新档案。';
+const starter = '请使用 zhixing-learning 技能开始学习。先读取共享学习档案。严格从最低难度开始：先用一个熟悉、具体、很短的材料，让我只指出对象、输入或输出，或做一个二选一判断；不要第一题就让我设计方案、解释完整流程或综合作答。等我回答后，只根据证据逐层增加一个变量：正例，再近似反例，再规则边界，最后新情境迁移。每次一道题，等待我回答，不要提前给出答案；真实作答后再更新档案。';
 const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
 const chrome = (title, name, extra='') => `<div class="window-bar"><span>${icon(name)}${title}</span>${extra}</div>`;
 function icons(){window.lucide?.createIcons({attrs:{width:17,height:17,'stroke-width':1.6}});}
@@ -93,7 +93,7 @@ let pendingStart=null;
 async function startLearning(existing=false){
   const goal=$('#learning-goal').value.trim();if(!goal){$('#learning-goal').focus();return;}
   if(busy)return;busy=true;$('#start-learning button').disabled=true;
-  const text=`请使用 zhixing-learning 开始学习。我的问题是：${goal}。先用 zhixing_archive 读取档案，每次只问一道题，等待我回答，先不要泄露答案。`;
+    const text=`请使用 zhixing-learning 开始学习。我的问题是：${goal}。先用 zhixing_archive 读取档案。严格从第0层开始：用一个具体、熟悉、很短的材料，让我只辨认对象、输入或输出，或做一个二选一判断；不要一开始要求我设计方案、解释完整流程或综合作答。等我回答后再根据证据逐层建构，每次只增加一个变量，依次练正例、近似反例、规则边界和新情境迁移。每次只问一道题，等待我回答，先不要泄露答案。`;
   try{
     if(!embedded){await sendPrompt(text);return;}
     if(!pendingStart||pendingStart.goal!==goal)pendingStart={id:'topic-'+crypto.randomUUID(),title:goal.slice(0,100),goal,sources:[],models:[],next:'回答第一道诊断题'};
