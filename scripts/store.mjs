@@ -7,6 +7,16 @@ function text(value, field) { check(typeof value === 'string' && value.trim().le
 function id(value) { check(typeof value === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value), 'Invalid id'); }
 function strings(value, field) { check(Array.isArray(value), `Invalid ${field}`); value.forEach(v => text(v, field)); }
 function choice(value, options, field) { check(options.includes(value), `Invalid ${field}`); }
+function sessionsValid(t) {
+  if(t.sessions===undefined){check(t.primarySessionId===undefined,'Primary session must be linked');return;}
+  check(Array.isArray(t.sessions)&&t.sessions.length<=100,'Invalid sessions');
+  const ids=new Set();
+  for(const s of t.sessions){
+    check(typeof s.id==='string'&&/^[a-zA-Z0-9_-]{1,200}$/.test(s.id),'Invalid session id');
+    text(s.title,'session title');check(!ids.has(s.id),'Duplicate session');ids.add(s.id);
+  }
+  check(t.primarySessionId===undefined||ids.has(t.primarySessionId),'Primary session must be linked');
+}
 function modelValid(m) {
   check(m && typeof m === 'object', 'Missing model'); id(m.id);
   choice(m.kind, ['discrimination', 'connection'], 'kind');
@@ -32,6 +42,7 @@ export function validateArchive(a) {
     text(t.title, 'title'); text(t.goal, 'goal'); strings(t.sources, 'sources');
     check(Array.isArray(t.models) && Array.isArray(t.attempts) && Array.isArray(t.history), 'Invalid topic collections');
     t.models.forEach(modelValid);
+    sessionsValid(t);
   }
   return a;
 }
@@ -63,10 +74,24 @@ export function applyOperation(archive, op, now = new Date()) {
     check(!a.topics.some(x => x.id === t.id), 'Topic already exists');
     text(t.title, 'title'); text(t.goal, 'goal'); strings(t.sources, 'sources'); text(t.next, 'next');
     check(Array.isArray(t.models) && t.models.length === 0, 'Create an empty topic, then add models with provenance');
-    a.topics.push({id:t.id, title:t.title, goal:t.goal, sources:t.sources, models:[], attempts:[], next:t.next, history:[]});
+    sessionsValid(t);
+    a.topics.push({id:t.id, title:t.title, goal:t.goal, sources:t.sources, models:[], attempts:[], next:t.next, history:[],sessions:t.sessions||[],...(t.primarySessionId?{primarySessionId:t.primarySessionId}:{})});
   } else {
     const t = a.topics.find(x => x.id === op.topicId); check(t, 'Unknown topic');
-    if (op.type === 'revise-model') {
+    if(op.type==='link-session'){
+      sessionsValid({sessions:[op.session]});
+      t.sessions??=[];
+      const old=t.sessions.find(s=>s.id===op.session.id);
+      if(old)old.title=op.session.title;else t.sessions.push({id:op.session.id,title:op.session.title});
+      if(!t.primarySessionId||op.primary===true)t.primarySessionId=op.session.id;
+    }else if(op.type==='unlink-session'){
+      check(t.sessions?.some(s=>s.id===op.sessionId),'Session is not linked');
+      t.sessions=t.sessions.filter(s=>s.id!==op.sessionId);
+      if(t.primarySessionId===op.sessionId)delete t.primarySessionId;
+    }else if(op.type==='set-primary-session'){
+      check(t.sessions?.some(s=>s.id===op.sessionId),'Session is not linked');
+      t.primarySessionId=op.sessionId;
+    }else if (op.type === 'revise-model') {
       modelValid(op.model); text(op.author, 'author'); text(op.reason, 'reason');
       const before = t.models.find(x => x.id === op.model.id) ?? null;
       if (op.model.status === 'tested') check(t.attempts.some(x => x.modelId === op.model.id), 'No learner evidence for tested model');
