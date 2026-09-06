@@ -52,6 +52,12 @@ npm pack
 
 可单独运行 `node server.mjs` 预览界面，默认端口4317。独立预览只复制练习请求，dsh 内嵌版本才直接准备聊天草稿。
 
+## 共建署名
+
+由 [Daisywait](https://github.com/Daisywait) 与 GPT-6-Astra（通过 OpenAI Codex）协作开发。Daisywait 提出学习理念、产品需求与交互反馈，AI 协助界面设计、代码实现、测试和发布。
+
+GPT-6-Astra 为 AI 协作署名，不代表独立 GitHub 账号或 OpenAI 官方维护。本仓库的 AI 共同作者记录使用 `gpt-6-astra@ai.invalid` 占位地址，不关联真实邮箱或账号。
+
 ## 依据与许可
 
 学习方法依据于建国《学习观》的判别模型、联结模型和第34章渐构靶图。图表是依据图34-3的交互改编，未附书籍扫描图或完整原文。行为心理学示例为说明材料，非个人学习数据。
