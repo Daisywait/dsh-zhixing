@@ -1,7 +1,7 @@
 {
   "name": "dsh-zhixing",
   "description": "知行：DeepSeek Harness 内嵌模型学习工作台、渐构靶图与学习陪练",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {".":"./lib/index.js","./client":"./lib/client.js","./package.json":"./package.json"},

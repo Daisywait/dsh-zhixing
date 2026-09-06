@@ -20,21 +20,91 @@ $('#overview').setAttribute('aria-label','我的学习');
 $('#overview').title='我的学习';
 $('#overview span').textContent='我的学习';
 function toast(message){$('#toast').textContent=message;$('#toast').hidden=false;setTimeout(()=>$('#toast').hidden=true,2500);}
+const requests=new Map();
+let hostSessions=null,busy=false,newTopic=false;
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin||e.source!==parent||e.data?.type!=='zhixing:response')return;
+  const pending=requests.get(e.data.requestId);if(!pending)return;
+  requests.delete(e.data.requestId);clearTimeout(pending.timer);
+  e.data.error?pending.reject(new Error(e.data.error)):pending.resolve(e.data.result);
+});
+function host(action,payload={}){
+  return new Promise((resolve,reject)=>{
+    const requestId=crypto.randomUUID(),timer=setTimeout(()=>{requests.delete(requestId);reject(new Error('dsh 连接超时，请重试'));},30000);
+    requests.set(requestId,{resolve,reject,timer});parent.postMessage({type:'zhixing:request',requestId,action,payload},location.origin);
+  });
+}
+async function saveSession(op){
+  const response=await fetch(apiPath('/api/sessions'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...op,expectedRevision:state.data.revision})});
+  if(!response.ok){await load();throw new Error('关联未保存，请刷新后重试');}
+  state.data=await response.json();render();
+}
+function sessionSection(t){
+  if(!embedded||state.mode==='demo'||!t)return '';
+  return `<details class="related-sessions"><summary>相关会话 · ${t.sessions?.length||0}</summary><div class="session-links">${(t.sessions||[]).map(s=>{
+    const live=hostSessions?.sessions.find(x=>x.id===s.id),missing=hostSessions&&!live;
+    return `<div class="session-row"><button data-session-open="${esc(s.id)}" ${missing?'disabled':''}>${icon('messages-square')}<span>${esc(live?.title||s.title)}<small>${missing?'会话不可用 · 需要重新关联':s.id===t.primarySessionId?'主要学习会话':''}</small></span></button><button class="icon-button" data-session-primary="${esc(s.id)}" title="设为主要会话" aria-label="设为主要会话" ${missing||s.id===t.primarySessionId?'disabled':''}>${icon('pin')}</button><button class="icon-button" data-session-unlink="${esc(s.id)}" title="解除关联" aria-label="解除关联">${icon('unlink')}</button></div>`;
+  }).join('')||'<p class="source">尚未关联会话</p>'}</div><button id="link-session">${icon('plus')}关联会话</button></details>`;
+}
+async function chooseSession(t,onChoose){
+  hostSessions=await host('list');
+  const dialog=document.createElement('dialog');dialog.className='session-dialog';
+  dialog.innerHTML=`<form method="dialog" class="dialog-heading"><h2>选择学习会话</h2><button class="icon-button" aria-label="关闭" title="关闭">${icon('x')}</button></form><button id="session-create">${icon('plus')}新建独立会话</button><label for="session-search">已有会话</label><input id="session-search" type="search" placeholder="搜索会话标题"><div class="session-options"></div><p role="status" class="source"></p>`;
+  document.body.append(dialog);
+  const draw=()=>{const query=dialog.querySelector('input').value.toLowerCase();dialog.querySelector('.session-options').innerHTML=hostSessions.sessions.filter(s=>s.title.toLowerCase().includes(query)).map(s=>`<button data-choose="${esc(s.id)}">${icon('message-circle')}<span>${esc(s.title)}${s.id===hostSessions.currentId?'<small>当前会话</small>':''}</span></button>`).join('')||'<p>没有匹配的会话</p>';icons();};
+  draw();dialog.querySelector('input').oninput=draw;
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+  let choosing=false;
+  dialog.addEventListener('click',async e=>{
+    const button=e.target.closest('button');if(!button||choosing||(!button.dataset.choose&&button.id!=='session-create'))return;
+    choosing=true;dialog.querySelectorAll('button').forEach(b=>b.disabled=true);
+    try{
+      const session=button.id==='session-create'?await host('create',{key:t.id,title:t.title}):hostSessions.sessions.find(s=>s.id===button.dataset.choose);
+      await onChoose(session);dialog.close();
+    }catch(error){dialog.querySelector('[role=status]').textContent=error.message;}
+    finally{choosing=false;dialog.querySelectorAll('button').forEach(b=>b.disabled=false);}
+  });
+  dialog.showModal();
+}
 async function sendPrompt(text){
-  if(embedded&&parent!==window){parent.postMessage({type:'zhixing:practice',text},location.origin);return;}
+  if(embedded&&parent!==window){
+    const t=state.mode==='archive'?state.data.topics.find(x=>x.id===state.topic):null;
+    if(!t){toast('请先在真实学习空间创建学习主题');return;}
+    hostSessions=await host('list');
+    if(t.primarySessionId&&hostSessions.sessions.some(s=>s.id===t.primarySessionId))return host('practice',{sessionId:t.primarySessionId,text});
+    return chooseSession(t,async session=>{await saveSession({type:'link-session',topicId:t.id,session,primary:true});await host('practice',{sessionId:session.id,text});});
+  }
   await navigator.clipboard.writeText(text);toast('学习请求已复制');
 }
 function learningHome(t){
   const attempts=t?.attempts||[],last=attempts.at(-1);
-  $('#content').innerHTML=`<div class="learning-home"><div class="home-nav"><strong>${icon('book-open')}知行</strong><button data-view="map">${icon('workflow')}我的理解</button></div>
+  $('#content').innerHTML=`<div class="learning-home"><div class="home-nav"><strong>${icon('book-open')}知行</strong><div><button id="new-topic" class="icon-button" title="新建学习主题" aria-label="新建学习主题">${icon('plus')}</button><button data-view="map">${icon('workflow')}我的理解</button></div></div>
     <div class="learning-intro"><span class="eyebrow">${t?'继续上次的学习':'新的开始'}</span><h1>${esc(t?.title||'今天想弄明白什么？')}</h1>${t?`<p>${esc(t.goal)}</p>`:''}</div>
     ${t?`<div class="current-task"><span class="task-label">接下来</span><h2>${esc(t.next)}</h2><button class="primary" id="copy-next">${icon('play')}继续练一题</button></div>`:`<form id="start-learning"><label for="learning-goal">一个问题、一个概念，或者你想做成的事</label><textarea id="learning-goal" rows="3" required maxlength="2000" placeholder="例如：为什么我总分不清负强化和惩罚？"></textarea><button class="primary" type="submit">${icon('arrow-right')}从这里开始</button></form>`}
+    ${!t&&embedded?'<button id="start-existing">关联已有会话开始</button>':''}${sessionSection(t)}
     <div class="learning-route" aria-label="学习过程"><span class="current">${icon('message-circle-question')}试着回答</span>${icon('arrow-right')}<span>${icon('scan-line')}找到差距</span>${icon('arrow-right')}<span>${icon('refresh-cw')}换例子再试</span></div>
     ${last?`<div class="last-feedback"><span class="task-label">上次停在这里</span><p>${esc(last.feedback)}</p><span class="source">${esc(names[last.support])} · ${esc(names[last.outcome])}</span><details><summary>查看那次回答</summary><p>${esc(last.question)}</p><blockquote>${esc(last.answer)}</blockquote></details></div>`:`<div class="home-empty">${icon('sprout')}<p>还没有学习记录</p><button id="home-demo">看看一次学习的样子${icon('arrow-right')}</button></div>`}
     <div class="home-bottom"><span>${attempts.length} 次作答 · ${t?.models.length||0} 条理解记录</span><button data-view="map">查看我的理解${icon('arrow-up-right')}</button></div></div>`;
   icons();
 }
-document.addEventListener('submit',async e=>{if(e.target.id!=='start-learning')return;e.preventDefault();const goal=$('#learning-goal').value.trim();if(!goal)return;try{await sendPrompt(`请使用 zhixing-learning 开始学习。我的问题是：${goal}。先用 zhixing_archive 读取档案，每次只问一道题，等待我回答，先不要泄露答案。`);}catch{toast('未能准备学习请求，请重试');}});
+let pendingStart=null;
+async function startLearning(existing=false){
+  const goal=$('#learning-goal').value.trim();if(!goal){$('#learning-goal').focus();return;}
+  if(busy)return;busy=true;$('#start-learning button').disabled=true;
+  const text=`请使用 zhixing-learning 开始学习。我的问题是：${goal}。先用 zhixing_archive 读取档案，每次只问一道题，等待我回答，先不要泄露答案。`;
+  try{
+    if(!embedded){await sendPrompt(text);return;}
+    if(!pendingStart||pendingStart.goal!==goal)pendingStart={id:'topic-'+crypto.randomUUID(),title:goal.slice(0,100),goal,sources:[],models:[],next:'回答第一道诊断题'};
+    const topic=pendingStart;
+    const finish=async session=>{
+      if(!state.data.topics.some(t=>t.id===topic.id))await saveSession({type:'create-topic',topic:{...topic,sessions:[session],primarySessionId:session.id}});
+      state.topic=topic.id;newTopic=false;render();
+      await host('practice',{sessionId:session.id,text:text+` 学习主题 ID：${topic.id}，主题已建立，请沿用。`});pendingStart=null;
+    };
+    if(existing)await chooseSession(topic,finish);else await finish(await host('create',{key:topic.id,title:topic.title}));
+  }catch(error){toast(error.message);}finally{busy=false;const button=$('#start-learning button');if(button)button.disabled=false;}
+}
+document.addEventListener('submit',e=>{if(e.target.id==='start-learning'){e.preventDefault();startLearning();}});
 function targetMap(t,m){
   if(!m)return '<div class="blank-message">尚无模型</div>';
   const pairs=m.diagram?.pairs||[], pair=pairs[state.pair];
@@ -94,6 +164,7 @@ function render() {
   if(!a.topics.some(t=>t.id===state.topic))state.topic=a.topics[0]?.id;
   $('#topics').innerHTML=a.topics.map(t=>`<button class="${t.id===state.topic?'active':''}" data-topic="${esc(t.id)}" title="${esc(t.title)}" aria-current="${t.id===state.topic?'page':'false'}">${icon('book-open')}<span>${esc(t.title)}<small>${t.models.length} 个模型 · ${t.attempts.length} 次作答</small></span></button>`).join('') || '<div class="empty-list">尚无主题</div>';
   $('#handoff').disabled=state.mode==='demo';
+  if(newTopic&&state.mode==='archive'){learningHome(null);return;}
   if(!a.topics.length){state.view==='learn'?learningHome(null):worktable(null);return;}
   const t=a.topics.find(t=>t.id===state.topic);
   if(!t.models.some(m=>m.id===state.model))state.model=t.models[0]?.id;
@@ -111,9 +182,19 @@ function download(kind){const a=document.createElement('a');a.href=apiPath(`/dow
 $('#dataset').addEventListener('change',()=>{state.mode=$('#dataset').value;state.data=null;state.topic=null;state.model=null;state.pair=0;state.part='rule';state.filter='all';load();});
 document.addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b)return;
+  if(b.id==='new-topic'){newTopic=true;state.mode='archive';$('#dataset').value='archive';await load();render();return;}
+  if(b.id==='start-existing'){await startLearning(true);return;}
+  if(b.id==='link-session'||b.dataset.sessionOpen||b.dataset.sessionUnlink||b.dataset.sessionPrimary){
+    const t=state.data.topics.find(x=>x.id===state.topic);if(!t||busy)return;busy=true;
+    try{
+      if(b.id==='link-session')await chooseSession(t,session=>saveSession({type:'link-session',topicId:t.id,session}));
+      else if(b.dataset.sessionOpen)await host('open',{sessionId:b.dataset.sessionOpen});
+      else await saveSession({type:b.dataset.sessionUnlink?'unlink-session':'set-primary-session',topicId:t.id,sessionId:b.dataset.sessionUnlink||b.dataset.sessionPrimary});
+    }catch(error){toast(error.message);}finally{busy=false;}return;
+  }
   if(b.dataset.view){state.view=b.dataset.view;render();return;}
   if(b.id==='home-demo'){state.mode='demo';state.data=null;$('#dataset').value='demo';await load();return;}
-  if(b.dataset.topic){state.topic=b.dataset.topic;state.model=null;state.pair=0;state.part='rule';state.filter='all';render();}
+  if(b.dataset.topic){newTopic=false;state.topic=b.dataset.topic;state.model=null;state.pair=0;state.part='rule';state.filter='all';render();}
   else if(b.dataset.model){state.model=b.dataset.model;state.pair=0;state.part='rule';render();}
   else if(b.dataset.part){state.part=b.dataset.part;render();$('.selected-detail')?.focus({preventScroll:true});if(matchMedia('(max-width:760px)').matches)$('.selected-detail')?.scrollIntoView({block:'center',behavior:'smooth'});}
   else if(b.dataset.pair!==undefined){state.pair=Number(b.dataset.pair);state.part='pair';render();$(`[data-pair="${state.pair}"]`)?.focus({preventScroll:true});}
@@ -131,3 +212,4 @@ document.addEventListener('keydown',e=>{if(e.target.getAttribute('role')!=='tab'
 $('#export').onclick=()=>{if(state.data)download(state.mode);};
 $('#handoff').onclick=()=>download('handoff');
 load();setInterval(load,3000);
+if(embedded)host('list').then(result=>{hostSessions=result;render();}).catch(()=>toast('会话列表暂不可用，打开相关会话时可重试'));
