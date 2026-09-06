@@ -70,6 +70,7 @@ async function sendPrompt(text){
   if(embedded&&parent!==window){
     const t=state.mode==='archive'?state.data.topics.find(x=>x.id===state.topic):null;
     if(!t){toast('请先在真实学习空间创建学习主题');return;}
+    text+=` 学习主题 ID：${t.id}，请沿用该主题。`;
     hostSessions=await host('list');
     if(t.primarySessionId&&hostSessions.sessions.some(s=>s.id===t.primarySessionId))return host('practice',{sessionId:t.primarySessionId,text});
     return chooseSession(t,async session=>{await saveSession({type:'link-session',topicId:t.id,session,primary:true});await host('practice',{sessionId:session.id,text});});
@@ -79,6 +80,7 @@ async function sendPrompt(text){
 function learningHome(t){
   const attempts=t?.attempts||[],last=attempts.at(-1);
   $('#content').innerHTML=`<div class="learning-home"><div class="home-nav"><strong>${icon('book-open')}知行</strong><div><button id="new-topic" class="icon-button" title="新建学习主题" aria-label="新建学习主题">${icon('plus')}</button><button data-view="map">${icon('workflow')}我的理解</button></div></div>
+    ${state.data.topics.length>1?`<label for="home-topic">学习主题</label><select id="home-topic">${state.data.topics.map(x=>`<option value="${esc(x.id)}" ${x.id===state.topic?'selected':''}>${esc(x.title)}</option>`).join('')}</select>`:''}
     <div class="learning-intro"><span class="eyebrow">${t?'继续上次的学习':'新的开始'}</span><h1>${esc(t?.title||'今天想弄明白什么？')}</h1>${t?`<p>${esc(t.goal)}</p>`:''}</div>
     ${t?`<div class="current-task"><span class="task-label">接下来</span><h2>${esc(t.next)}</h2><button class="primary" id="copy-next">${icon('play')}继续练一题</button></div>`:`<form id="start-learning"><label for="learning-goal">一个问题、一个概念，或者你想做成的事</label><textarea id="learning-goal" rows="3" required maxlength="2000" placeholder="例如：为什么我总分不清负强化和惩罚？"></textarea><button class="primary" type="submit">${icon('arrow-right')}从这里开始</button></form>`}
     ${!t&&embedded?'<button id="start-existing">关联已有会话开始</button>':''}${sessionSection(t)}
@@ -105,6 +107,7 @@ async function startLearning(existing=false){
   }catch(error){toast(error.message);}finally{busy=false;const button=$('#start-learning button');if(button)button.disabled=false;}
 }
 document.addEventListener('submit',e=>{if(e.target.id==='start-learning'){e.preventDefault();startLearning();}});
+document.addEventListener('change',e=>{if(e.target.id==='home-topic'){newTopic=false;state.topic=e.target.value;state.model=null;render();}});
 function targetMap(t,m){
   if(!m)return '<div class="blank-message">尚无模型</div>';
   const pairs=m.diagram?.pairs||[], pair=pairs[state.pair];
